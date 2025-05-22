@@ -276,6 +276,38 @@ def format_news_as_markdown(news_items):
         markdown += "---\n\n"
     return markdown
 
+# Function to translate search query to English using Sutra LLM
+def translate_query_to_english(query, api_key):
+    try:
+        # Get base model (non-streaming) for translation
+        model = get_base_chat_model(api_key)
+        
+        system_message = """
+        You are a professional translator. Translate the following search query to English.
+        
+        Translation Rules:
+        1. Keep the translation concise and clear
+        2. Maintain the search intent
+        3. Preserve any proper nouns (names, places)
+        4. Keep any numbers, dates, and measurements
+        5. Ensure the translation is natural and search-friendly
+        
+        Return ONLY the translated query without any explanations or additional text.
+        """
+        
+        messages = [
+            HumanMessage(content=f"{system_message}\n\nQuery to translate:\n{query}")
+        ]
+        
+        response = model.invoke(messages)
+        translated_query = response.content.strip()
+        
+        return translated_query
+        
+    except Exception as e:
+        st.warning(f"Error translating query: {str(e)}. Using original query.")
+        return query
+
 # Initialize session state variables
 if "serper_api_key" not in st.session_state:
     st.session_state.serper_api_key = ""
@@ -359,11 +391,19 @@ if search_button or (not st.session_state.news_data and st.session_state.serper_
     else:
         st.session_state.search_query = search_query
         
+        # Translate query to English if needed
+        if selected_language != "English" and st.session_state.sutra_api_key:
+            with st.spinner("Translating search query to English..."):
+                english_query = translate_query_to_english(search_query, st.session_state.sutra_api_key)
+                st.info(f"Translated query: '{english_query}'")
+        else:
+            english_query = search_query
+        
         # Show loading message
-        with st.spinner(f"Fetching news for '{search_query}'..."):
+        with st.spinner(f"Fetching news for '{english_query}'..."):
             # Fetch news data
             news_items = fetch_news(
-                query=search_query,
+                query=english_query,
                 num_results=num_results,
                 language=selected_language.lower() if selected_language != "English" else None
             )
